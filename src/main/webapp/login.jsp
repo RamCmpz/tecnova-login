@@ -386,7 +386,7 @@
                 sistema de gestión de ventas e inventario.
             </p>
 
-            <form action="#" method="post">
+            <form action="LoginServlet" method="POST">
 
                 <div class="campo">
                     <label for="usuario">Nombre de usuario</label>
