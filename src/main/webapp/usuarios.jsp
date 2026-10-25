@@ -169,7 +169,7 @@
             <a href="<%= ctx %>/inicio.jsp">🏠 Inicio</a>
             <a href="<%= ctx %>/UsuarioServlet" class="activo">👥 Usuarios</a>
             <a href="<%= ctx %>/ClienteServlet">🧑‍💼 Clientes</a>
-            <a href="#">🚚 Proveedores <span class="pronto">pronto</span></a>
+            <a href="<%= ctx %>/ProveedorServlet">🚚 Proveedores</a>
             <a href="#">📦 Productos <span class="pronto">pronto</span></a>
             <a href="#">🧾 Ventas <span class="pronto">pronto</span></a>
             <a href="#">📊 Reportes <span class="pronto">pronto</span></a>
