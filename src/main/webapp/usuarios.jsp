@@ -226,7 +226,10 @@
                     </div>
                     <div class="col-12 col-md-6 col-xl-2">
                         <label for="permisoId">Permiso</label>
-                        <select class="form-select" id="permisoId" name="permisoId" required>
+                     <select class="form-select" id="permisoId" name="permisoId" <%= editando ? "required" : "" %>>
+    <% if (!editando) { %>
+        <option value="" selected>Automático según el rol</option>
+    <% } %>
                             <% for (UsuarioRepository.Opcion o : permisos) {
                                    boolean sel = editando && editar.getPermisoId() != null
                                            && editar.getPermisoId() == o.getId(); %>
