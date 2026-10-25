@@ -1,5 +1,6 @@
 package com.ramoncitoacademy.holamundoweb;
 
+import java.util.List;
 import java.io.IOException;
 import java.sql.SQLException;
 import java.sql.SQLIntegrityConstraintViolationException;
@@ -86,30 +87,66 @@ public class UsuarioServlet extends HttpServlet {
 
     // ---------- Acciones ----------
 
-    private void crear(HttpServletRequest request, HttpServletResponse response,
+        private void crear(HttpServletRequest request, HttpServletResponse response,
                        String actual) throws SQLException, IOException {
 
         String usuario = recortar(request.getParameter("usuario"));
         String nombre = recortar(request.getParameter("nombre"));
         String password = request.getParameter("password");
         Integer rolId = aEntero(request.getParameter("rolId"));
-        Integer permisoId = aEntero(request.getParameter("permisoId"));
+        Integer permisoId = aEntero(request.getParameter("permisoId")); // null = automático
 
         if (usuario == null || !PATRON_USUARIO.matcher(usuario).matches()
                 || nombre == null || nombre.isEmpty() || nombre.length() > 100
                 || !passwordValida(password)
-                || rolId == null || permisoId == null) {
+                || rolId == null) {
             redirigir(request, response, "err=invalido");
             return;
         }
 
-        if (repo.existeUsuario(usuario)) {
+        String rolNombre = nombreDe(repo.listarRoles(), rolId);
+        if (rolNombre == null) {
+            redirigir(request, response, "err=invalido");
+            return;
+        }
+
+        // Factory Method: crea el usuario con los valores por defecto del rol
+        Usuario nuevo = UsuarioFactory.crear(rolNombre, usuario, nombre);
+
+        if (permisoId == null) {
+            permisoId = idDe(repo.listarPermisos(), nuevo.getPermisoNombre());
+            if (permisoId == null) {
+                redirigir(request, response, "err=invalido");
+                return;
+            }
+        }
+
+        if (repo.existeUsuario(nuevo.getUsuario())) {
             redirigir(request, response, "err=duplicado");
             return;
         }
 
-        repo.crear(usuario, nombre, password, rolId, permisoId, actual);
+        repo.crear(nuevo.getUsuario(), nuevo.getNombre(), password,
+                rolId, permisoId, actual);
         redirigir(request, response, "msg=creado");
+    }
+
+    private static String nombreDe(List<UsuarioRepository.Opcion> lista, int id) {
+        for (UsuarioRepository.Opcion o : lista) {
+            if (o.getId() == id) {
+                return o.getNombre();
+            }
+        }
+        return null;
+    }
+
+    private static Integer idDe(List<UsuarioRepository.Opcion> lista, String nombre) {
+        for (UsuarioRepository.Opcion o : lista) {
+            if (o.getNombre().equals(nombre)) {
+                return o.getId();
+            }
+        }
+        return null;
     }
 
     private void actualizar(HttpServletRequest request, HttpServletResponse response,
