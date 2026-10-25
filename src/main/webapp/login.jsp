@@ -385,9 +385,31 @@
                 Ingresa tus credenciales para acceder al
                 sistema de gestión de ventas e inventario.
             </p>
+                           <%
+                String error = request.getParameter("error");
+                String restantes = request.getParameter("restantes");
+                boolean hayRestantes = restantes != null && restantes.matches("[0-9]");
 
-            <form action="LoginServlet" method="POST">
-
+                if ("credenciales".equals(error)) {
+            %>
+            <p style="color: #ff8080; margin-bottom: 18px; font-size: 13px;">
+                Usuario o contraseña incorrectos.
+                <% if (hayRestantes) { %>
+                    Te quedan <strong><%= restantes %></strong> intento(s).
+                <% } %>
+            </p>
+            <% } else if ("bloqueado".equals(error)) { %>
+            <p style="color: #ffb347; margin-bottom: 18px; font-size: 13px;">
+                Cuenta bloqueada por 3 intentos fallidos o usuario inactivo.
+                Contacta al administrador para desbloquearla.
+            </p>
+            <% } else if ("campos".equals(error)) { %>
+            <p style="color: #ff8080; margin-bottom: 18px; font-size: 13px;">
+                Completa todos los campos.
+            </p>
+            <% } %>
+            
+            <form action="${pageContext.request.contextPath}/LoginServlet" method="post">
                 <div class="campo">
                     <label for="usuario">Nombre de usuario</label>
 
