@@ -1,4 +1,3 @@
-
 package com.ramoncitoacademy.holamundoweb;
 
 import java.sql.Connection;
@@ -7,38 +6,48 @@ import java.sql.SQLException;
 
 public class ConexionDB {
 
-private static final String URL =
-        System.getenv("DB_URL") != null
-        ? System.getenv("DB_URL")
-        : "jdbc:mysql://localhost:3306/tecnova_db?serverTimezone=UTC";
+    // Única instancia de la clase (Singleton)
+    private static ConexionDB instancia;
 
-private static final String USER =
-        System.getenv("DB_USER") != null
-        ? System.getenv("DB_USER")
-        : "root";
+    private final String url;
+    private final String user;
+    private final String password;
 
-private static final String PASSWORD =
-        System.getenv("DB_PASSWORD") != null
-        ? System.getenv("DB_PASSWORD")
-        : "ram123";
+    // Constructor privado: nadie más puede hacer "new ConexionDB()"
+    private ConexionDB() {
+        this.url = leer("DB_URL",
+                "jdbc:mysql://localhost:3306/tecnova_db?serverTimezone=UTC");
+        this.user = leer("DB_USER", "root");
+        this.password = leer("DB_PASSWORD", "");
 
-    public static Connection conectar() throws SQLException {
         try {
             Class.forName("com.mysql.cj.jdbc.Driver");
         } catch (ClassNotFoundException e) {
-            throw new SQLException(
-                    "No se encontró el controlador de MySQL.", e
-            );
+            throw new IllegalStateException(
+                    "No se encontró el controlador de MySQL.", e);
         }
+    }
 
-        if (URL == null || URL.isBlank()
-                || USER == null || USER.isBlank()
-                || PASSWORD == null || PASSWORD.isBlank()) {
-            throw new SQLException(
-                    "Faltan configurar DB_URL, DB_USER o DB_PASSWORD."
-            );
+    // Punto de acceso global a la única instancia
+    public static synchronized ConexionDB getInstance() {
+        if (instancia == null) {
+            instancia = new ConexionDB();
         }
+        return instancia;
+    }
 
-        return DriverManager.getConnection(URL, USER, PASSWORD);
+    // Entrega una conexión nueva cada vez (más seguro con Aiven)
+    public Connection getConnection() throws SQLException {
+        return DriverManager.getConnection(url, user, password);
+    }
+
+    // Compatibilidad con el código anterior (PruebaConexion, etc.)
+    public static Connection conectar() throws SQLException {
+        return getInstance().getConnection();
+    }
+
+    private static String leer(String variable, String porDefecto) {
+        String valor = System.getenv(variable);
+        return (valor != null && !valor.isBlank()) ? valor : porDefecto;
     }
 }
