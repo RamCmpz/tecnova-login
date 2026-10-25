@@ -164,11 +164,11 @@
 
     <aside class="sidebar">
         <div class="logo-texto">Tec<span>Nova</span></div>
-
+        
         <nav class="menu">
             <a href="<%= ctx %>/inicio.jsp">🏠 Inicio</a>
             <a href="<%= ctx %>/UsuarioServlet" class="activo">👥 Usuarios</a>
-            <a href="#">🧑‍💼 Clientes <span class="pronto">pronto</span></a>
+            <a href="<%= ctx %>/ClienteServlet">🧑‍💼 Clientes</a>
             <a href="#">🚚 Proveedores <span class="pronto">pronto</span></a>
             <a href="#">📦 Productos <span class="pronto">pronto</span></a>
             <a href="#">🧾 Ventas <span class="pronto">pronto</span></a>
