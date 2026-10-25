@@ -109,7 +109,7 @@
             <a href="inicio.jsp" class="activo">🏠 Inicio</a>
             <a href="UsuarioServlet">👥 Usuarios</a>
             <a href="ClienteServlet">🧑‍💼 Clientes</a>
-            <a href="#">🚚 Proveedores <span class="pronto">pronto</span></a>
+            <a href="ProveedorServlet">🚚 Proveedores</a>
             <a href="#">📦 Productos <span class="pronto">pronto</span></a>
             <a href="#">🧾 Ventas <span class="pronto">pronto</span></a>
             <a href="#">📊 Reportes <span class="pronto">pronto</span></a>
@@ -142,7 +142,7 @@
                 </a>
             </div>
             <div class="col-12 col-md-6 col-xl-4">
-                <a href="#" class="tarjeta-mod">
+                <a href="ProveedorServlet" class="tarjeta-mod">
                     <div class="icono">🚚</div>
                     <h5>Proveedores</h5>
                     <p>Datos de contacto y transacciones con proveedores.</p>
