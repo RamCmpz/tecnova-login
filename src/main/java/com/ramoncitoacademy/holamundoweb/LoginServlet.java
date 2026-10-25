@@ -1,4 +1,3 @@
-
 package com.ramoncitoacademy.holamundoweb;
 
 import java.io.IOException;
@@ -17,6 +16,8 @@ import org.mindrot.jbcrypt.BCrypt;
 @WebServlet("/LoginServlet")
 public class LoginServlet extends HttpServlet {
 
+    private static final int MAX_INTENTOS = 3;
+
     @Override
     protected void doPost(HttpServletRequest request,
                           HttpServletResponse response)
@@ -26,44 +27,78 @@ public class LoginServlet extends HttpServlet {
 
         String usuario = request.getParameter("usuario");
         String contrasena = request.getParameter("contrasena");
+        String base = request.getContextPath();
 
         if (usuario == null || contrasena == null
                 || usuario.trim().isEmpty()
                 || contrasena.isEmpty()) {
-
-            response.sendRedirect(
-                    request.getContextPath() + "/login.jsp?error=campos");
+            response.sendRedirect(base + "/login.jsp?error=campos");
             return;
         }
+        usuario = usuario.trim();
 
-        String sql =
-                "SELECT password_hash FROM usuarios WHERE usuario = ?";
+        String sqlBuscar = "SELECT id, password_hash, intentosFallidos, "
+                + "bloqueado, estado FROM usuarios WHERE usuario = ?";
 
-        try (Connection conexion = ConexionDB.conectar();
-             PreparedStatement sentencia =
-                     conexion.prepareStatement(sql)) {
+        try (Connection con = ConexionDB.getInstance().getConnection();
+             PreparedStatement buscar = con.prepareStatement(sqlBuscar)) {
 
-            sentencia.setString(1, usuario.trim());
+            buscar.setString(1, usuario);
 
-            try (ResultSet resultado = sentencia.executeQuery()) {
+            try (ResultSet rs = buscar.executeQuery()) {
 
-                if (resultado.next()) {
-                    String hash = resultado.getString("password_hash");
+                // Usuario inexistente: mismo mensaje que clave incorrecta
+                if (!rs.next()) {
+                    response.sendRedirect(base + "/login.jsp?error=credenciales");
+                    return;
+                }
 
-                    if (BCrypt.checkpw(contrasena, hash)) {
-                        HttpSession sesion = request.getSession();
-                        sesion.setAttribute("usuario", usuario.trim());
+                long id = rs.getLong("id");
+                String hash = rs.getString("password_hash");
+                int intentos = rs.getInt("intentosFallidos");
+                boolean bloqueado = rs.getBoolean("bloqueado");
+                String estado = rs.getString("estado");
 
-                        response.sendRedirect(
-                                request.getContextPath() + "/inicio.jsp");
-                        return;
+                // Cuenta bloqueada o inactiva
+                if (bloqueado || !"Activo".equalsIgnoreCase(estado)) {
+                    response.sendRedirect(base + "/login.jsp?error=bloqueado");
+                    return;
+                }
+
+                // Contraseña correcta
+                if (BCrypt.checkpw(contrasena, hash)) {
+                    try (PreparedStatement ok = con.prepareStatement(
+                            "UPDATE usuarios SET intentosFallidos = 0, "
+                            + "ultimoAcceso = NOW() WHERE id = ?")) {
+                        ok.setLong(1, id);
+                        ok.executeUpdate();
                     }
+                    HttpSession sesion = request.getSession();
+                    sesion.setAttribute("usuario", usuario);
+                    response.sendRedirect(base + "/inicio.jsp");
+                    return;
+                }
+
+                // Contraseña incorrecta: suma intento y bloquea al llegar a 3
+                intentos++;
+                boolean quedaBloqueado = intentos >= MAX_INTENTOS;
+
+                try (PreparedStatement fallo = con.prepareStatement(
+                        "UPDATE usuarios SET intentosFallidos = ?, "
+                        + "bloqueado = ? WHERE id = ?")) {
+                    fallo.setInt(1, intentos);
+                    fallo.setBoolean(2, quedaBloqueado);
+                    fallo.setLong(3, id);
+                    fallo.executeUpdate();
+                }
+
+                if (quedaBloqueado) {
+                    response.sendRedirect(base + "/login.jsp?error=bloqueado");
+                } else {
+                    response.sendRedirect(base + "/login.jsp?error=credenciales&restantes="
+                            + (MAX_INTENTOS - intentos));
                 }
             }
-
-            response.sendRedirect(
-                    request.getContextPath()
-                    + "/login.jsp?error=credenciales");
 
         } catch (SQLException e) {
             throw new ServletException(
