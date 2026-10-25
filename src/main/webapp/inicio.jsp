@@ -107,7 +107,7 @@
 
         <nav class="menu">
             <a href="inicio.jsp" class="activo">🏠 Inicio</a>
-            <a href="#">👥 Usuarios <span class="pronto">pronto</span></a>
+            <a href="UsuarioServlet">👥 Usuarios</a>
             <a href="#">🧑‍💼 Clientes <span class="pronto">pronto</span></a>
             <a href="#">🚚 Proveedores <span class="pronto">pronto</span></a>
             <a href="#">📦 Productos <span class="pronto">pronto</span></a>
@@ -128,7 +128,7 @@
 
         <div class="row g-4">
             <div class="col-12 col-md-6 col-xl-4">
-                <a href="#" class="tarjeta-mod">
+                <a href="UsuarioServlet" class="tarjeta-mod">
                     <div class="icono">👥</div>
                     <h5>Usuarios</h5>
                     <p>Crear, editar y administrar cuentas de acceso y roles.</p>
