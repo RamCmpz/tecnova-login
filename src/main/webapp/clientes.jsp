@@ -38,8 +38,8 @@
     else if ("activado".equals(msg)) textoMsg = "Cliente activado nuevamente.";
 
     String textoErr = null;
-    if ("duplicado".equals(err)) textoErr = "Ya existe una persona registrada con ese DNI.";
-    else if ("invalido".equals(err)) textoErr = "Datos inválidos. El DNI debe tener 8 dígitos, el correo debe ser válido y el teléfono solo números.";
+    if ("duplicado".equals(err)) textoErr = "Ya existe un cliente con ese DNI o ese RUC.";
+    else if ("invalido".equals(err)) textoErr = "Datos inválidos. El DNI debe tener 8 dígitos, el RUC 11 dígitos (y debe ir junto con la razón social), el correo debe ser válido y el teléfono solo números.";
     else if ("noexiste".equals(err)) textoErr = "El cliente indicado no existe.";
 
     String paginaActiva = "clientes";
@@ -73,7 +73,8 @@
                     <input type="hidden" name="id" value="<%= editar.getIdCliente() %>">
                 <% } %>
 
-                <div class="row g-3">
+                <h3>Datos personales</h3>
+                <div class="row g-3 mb-3">
                     <div class="col-12 col-md-6 col-xl-3">
                         <label for="nombres">Nombres</label>
                         <input type="text" class="form-control" id="nombres" name="nombres"
@@ -121,6 +122,24 @@
                     </div>
                 </div>
 
+                <h3>Datos de facturación (opcional)</h3>
+                <div class="row g-3">
+                    <div class="col-12 col-md-4">
+                        <label for="ruc">RUC</label>
+                        <input type="text" class="form-control" id="ruc" name="ruc"
+                               maxlength="11" pattern="(10|15|17|20)[0-9]{9}" inputmode="numeric"
+                               value="<%= editando ? h(editar.getRuc()) : "" %>">
+                        <div class="form-text">11 dígitos. Solo si el cliente pide factura.</div>
+                    </div>
+                    <div class="col-12 col-md-8">
+                        <label for="razonSocial">Razón social</label>
+                        <input type="text" class="form-control" id="razonSocial" name="razonSocial"
+                               maxlength="120"
+                               value="<%= editando ? h(editar.getRazonSocial()) : "" %>">
+                        <div class="form-text">Obligatoria si ingresas RUC.</div>
+                    </div>
+                </div>
+
                 <div class="mt-4 d-flex gap-2">
                     <button type="submit" class="btn btn-azul px-4"><%= editando ? "Guardar cambios" : "Registrar cliente" %></button>
                     <% if (editando) { %>
@@ -137,8 +156,8 @@
                 <table class="tabla">
                     <thead>
                         <tr>
-                            <th>ID</th><th>Cliente</th><th>DNI</th><th>Teléfono</th>
-                            <th>Correo</th><th>Tipo</th><th>Estado</th><th>Acciones</th>
+                            <th>ID</th><th>Cliente</th><th>DNI</th><th>RUC</th><th>Teléfono</th>
+                            <th>Tipo</th><th>Estado</th><th>Acciones</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -146,10 +165,15 @@
                            boolean activo = "Activo".equalsIgnoreCase(c.getEstado()); %>
                         <tr>
                             <td><%= c.getIdCliente() %></td>
-                            <td><strong><%= h(c.getNombres()) %> <%= h(c.getApellidos()) %></strong></td>
+                            <td>
+                                <strong><%= h(c.getNombres()) %> <%= h(c.getApellidos()) %></strong>
+                                <% if (c.getRazonSocial() != null) { %>
+                                    <div class="form-text"><%= h(c.getRazonSocial()) %></div>
+                                <% } %>
+                            </td>
                             <td><%= h(c.getDni()) %></td>
+                            <td><%= c.getRuc() == null ? "—" : h(c.getRuc()) %></td>
                             <td><%= c.getTelefono() == null ? "—" : h(c.getTelefono()) %></td>
-                            <td><%= c.getCorreo() == null ? "—" : h(c.getCorreo()) %></td>
                             <td><span class="insignia info"><%= h(c.getTipoCliente()) %></span></td>
                             <td><span class="insignia <%= activo ? "ok" : "mal" %>"><%= h(c.getEstado()) %></span></td>
                             <td>
