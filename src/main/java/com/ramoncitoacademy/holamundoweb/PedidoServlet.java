@@ -140,11 +140,12 @@ public class PedidoServlet extends HttpServlet {
             throws SQLException, VentaRepository.VentaException, IOException {
 
         Integer id = aEntero(request.getParameter("id"));
-        if (id == null) {
-            error(request, response, "El pedido indicado no existe.");
+        String tipo = request.getParameter("tipoComprobante");
+        if (id == null || ComprobanteStrategy.de(tipo) == null) {
+            error(request, response, "Pedido o tipo de comprobante no válido.");
             return;
         }
-        int idVenta = repo.convertir(id, actual);
+        int idVenta = repo.convertir(id, actual, tipo);
         response.sendRedirect(request.getContextPath()
                 + "/PedidoServlet?msg=convertido&idVenta=" + idVenta);
     }
