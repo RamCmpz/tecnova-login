@@ -211,13 +211,19 @@ public class PedidoRepository {
     // ---------- Convertir en venta ----------
 
     /**
-     * Convierte un pedido pendiente en venta (con su boleta) en UNA sola
+     * Convierte un pedido pendiente en venta (con su comprobante) en UNA sola
      * transacción: si algo falla, no se crea la venta y el pedido sigue Pendiente.
      *
+     * @param tipo "Boleta" o "Factura"
      * @return el id de la venta creada
      */
-    public int convertir(int idPedido, String usuario)
+    public int convertir(int idPedido, String usuario, String tipo)
             throws SQLException, VentaException {
+
+        ComprobanteStrategy estrategia = ComprobanteStrategy.de(tipo);
+        if (estrategia == null) {
+            throw new VentaException("Tipo de comprobante no válido.");
+        }
 
         try (Connection con = ConexionDB.getInstance().getConnection()) {
             con.setAutoCommit(false);
@@ -251,8 +257,8 @@ public class PedidoRepository {
                 }
 
                 // 3. Crea la venta dentro de esta misma transacción
-                int idVenta = ventas.crearEnTransaccion(con, idCliente, usuario, items,
-                        "Boleta", "B001");
+                //    (la estrategia valida, por ejemplo, que el cliente tenga RUC para factura)
+                int idVenta = ventas.crearEnTransaccion(con, idCliente, usuario, items, estrategia);
 
                 // 4. Marca el pedido como convertido
                 try (PreparedStatement ps = con.prepareStatement(
@@ -301,8 +307,7 @@ public class PedidoRepository {
         int idVenta = rs.getInt("idVenta");
         p.setIdVenta(rs.wasNull() ? null : idVenta);
 
-        String serie = rs.getString("serie");
-        p.setSerie(serie);
+        p.setSerie(rs.getString("serie"));
         int numero = rs.getInt("numero");
         p.setNumero(rs.wasNull() ? null : numero);
 
