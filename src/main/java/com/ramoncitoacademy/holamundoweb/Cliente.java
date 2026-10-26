@@ -11,7 +11,12 @@ public class Cliente {
     private String telefono;
     private String direccion;
     private String tipoCliente;
+    private String ruc;
+    private String razonSocial;
     private String estado;
+
+    /** Puede recibir factura solo si tiene RUC registrado. */
+    public boolean isTieneRuc() { return ruc != null && !ruc.isEmpty(); }
 
     public int getIdCliente() { return idCliente; }
     public void setIdCliente(int idCliente) { this.idCliente = idCliente; }
@@ -39,6 +44,12 @@ public class Cliente {
 
     public String getTipoCliente() { return tipoCliente; }
     public void setTipoCliente(String tipoCliente) { this.tipoCliente = tipoCliente; }
+
+    public String getRuc() { return ruc; }
+    public void setRuc(String ruc) { this.ruc = ruc; }
+
+    public String getRazonSocial() { return razonSocial; }
+    public void setRazonSocial(String razonSocial) { this.razonSocial = razonSocial; }
 
     public String getEstado() { return estado; }
     public void setEstado(String estado) { this.estado = estado; }
