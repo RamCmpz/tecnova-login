@@ -54,16 +54,16 @@
 
     String msg = request.getParameter("msg");
     String textoMsg = null;
-    String linkBoleta = null;
+    String linkComprobante = null;
     if ("creado".equals(msg)) {
         textoMsg = "Pedido registrado correctamente. Queda pendiente hasta convertirlo en venta.";
     } else if ("convertido".equals(msg)) {
-        textoMsg = "Pedido convertido en venta. Se generó la boleta y se descontó el stock.";
+        textoMsg = "Pedido convertido en venta. Se generó el comprobante y se descontó el stock.";
         try {
-            linkBoleta = ctx + "/VentaServlet?accion=ver&id="
+            linkComprobante = ctx + "/VentaServlet?accion=ver&id="
                     + Integer.parseInt(request.getParameter("idVenta"));
         } catch (Exception e) {
-            linkBoleta = null;
+            linkComprobante = null;
         }
     } else if ("cancelado".equals(msg)) {
         textoMsg = "Pedido cancelado.";
@@ -83,6 +83,7 @@
         .resumen { max-width: 340px; margin-left: auto; font-size: 14px; }
         .resumen div { display: flex; justify-content: space-between; padding: 4px 0; color: var(--secundario); }
         .resumen .total { color: var(--texto); font-weight: 700; font-size: 18px; border-top: 1px solid var(--borde); margin-top: 6px; padding-top: 10px; }
+        .select-mini { font-size: 12px; padding: 3px 24px 3px 8px; border-radius: 8px; width: auto; }
     </style>
 </head>
 <body>
@@ -91,13 +92,13 @@
 
     <main class="contenido">
         <h1>Solicitudes de pedido</h1>
-        <p class="sub mb-4">Registra lo que pide el cliente y conviértelo en venta cuando confirme. El pedido no reserva stock.</p>
+        <p class="sub mb-4">Registra lo que pide el cliente y conviértelo en venta (boleta o factura) cuando confirme. El pedido no reserva stock.</p>
 
         <% if (textoMsg != null) { %>
             <div class="alerta-ok">
                 <%= h(textoMsg) %>
-                <% if (linkBoleta != null) { %>
-                    <a href="<%= linkBoleta %>" class="btn-mini ms-2">Ver boleta</a>
+                <% if (linkComprobante != null) { %>
+                    <a href="<%= linkComprobante %>" class="btn-mini ms-2">Ver comprobante</a>
                 <% } %>
             </div>
         <% } %>
@@ -113,7 +114,7 @@
                 <span class="insignia <%= claseEstado(ver.getEstado()) %>"><%= h(ver.getEstado()) %></span>
                 &nbsp; <%= ver.getFechaPedido().toLocalDateTime().format(FMT) %> · registrado por <%= h(ver.getUsuario()) %>
                 <% if (ver.getNumeroVenta() != null) { %>
-                    · boleta <a href="<%= ctx %>/VentaServlet?accion=ver&id=<%= ver.getIdVenta() %>"><%= h(ver.getNumeroVenta()) %></a>
+                    · comprobante <a href="<%= ctx %>/VentaServlet?accion=ver&id=<%= ver.getIdVenta() %>"><%= h(ver.getNumeroVenta()) %></a>
                 <% } %>
             </p>
             <div class="envoltorio">
@@ -167,7 +168,7 @@
                         <label for="idCliente">Cliente</label>
                         <select class="form-select" id="idCliente" name="idCliente" required>
                             <% for (Cliente c : clientes) { %>
-                                <option value="<%= c.getIdCliente() %>"><%= h(c.getNombres()) %> <%= h(c.getApellidos()) %> · DNI <%= h(c.getDni()) %></option>
+                                <option value="<%= c.getIdCliente() %>"><%= h(c.getNombres()) %> <%= h(c.getApellidos()) %> · DNI <%= h(c.getDni()) %><%= c.isTieneRuc() ? " · RUC " + h(c.getRuc()) : "" %></option>
                             <% } %>
                         </select>
                     </div>
@@ -227,14 +228,18 @@
                                 <% } %>
                             </td>
                             <td>
-                                <div class="d-flex flex-wrap gap-1">
+                                <div class="d-flex flex-wrap gap-1 align-items-center">
                                     <a class="btn-mini" href="<%= ctx %>/PedidoServlet?accion=ver&id=<%= p.getIdPedido() %>">Ver</a>
 
                                     <% if (pendiente) { %>
-                                    <form method="post" action="<%= ctx %>/PedidoServlet" class="d-inline"
-                                          onsubmit="return confirm('¿Convertir este pedido en venta? Se descontará el stock y se generará la boleta.');">
+                                    <form method="post" action="<%= ctx %>/PedidoServlet" class="d-inline-flex gap-1 align-items-center"
+                                          onsubmit="return confirm('¿Convertir este pedido en venta? Se descontará el stock y se generará el comprobante.');">
                                         <input type="hidden" name="accion" value="convertir">
                                         <input type="hidden" name="id" value="<%= p.getIdPedido() %>">
+                                        <select name="tipoComprobante" class="form-select select-mini" aria-label="Tipo de comprobante">
+                                            <option value="Boleta" selected>Boleta</option>
+                                            <option value="Factura">Factura</option>
+                                        </select>
                                         <button type="submit" class="btn-mini">Convertir en venta</button>
                                     </form>
                                     <form method="post" action="<%= ctx %>/PedidoServlet" class="d-inline"
