@@ -21,11 +21,17 @@ public class Venta {
     private String tipoComprobante;
     private String serie;
     private int numero;
+    private String ruc;
+    private String razonSocial;
     private List<DetalleVenta> detalles = new ArrayList<>();
 
-    /** Ejemplo: B001-00000001 */
+    /** Ejemplo: B001-00000001 o F001-00000001 */
     public String getNumeroCompleto() {
         return serie + "-" + String.format(Locale.ROOT, "%08d", numero);
+    }
+
+    public boolean isFactura() {
+        return "Factura".equalsIgnoreCase(tipoComprobante);
     }
 
     public int getIdVenta() { return idVenta; }
@@ -66,6 +72,12 @@ public class Venta {
 
     public int getNumero() { return numero; }
     public void setNumero(int numero) { this.numero = numero; }
+
+    public String getRuc() { return ruc; }
+    public void setRuc(String ruc) { this.ruc = ruc; }
+
+    public String getRazonSocial() { return razonSocial; }
+    public void setRazonSocial(String razonSocial) { this.razonSocial = razonSocial; }
 
     public List<DetalleVenta> getDetalles() { return detalles; }
     public void setDetalles(List<DetalleVenta> detalles) { this.detalles = detalles; }
