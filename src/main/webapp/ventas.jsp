@@ -47,14 +47,14 @@
 
     String msg = request.getParameter("msg");
     String textoMsg = null;
-    String linkBoleta = null;
+    String linkComprobante = null;
     if ("creada".equals(msg)) {
         textoMsg = "Venta registrada correctamente.";
         try {
-            linkBoleta = ctx + "/VentaServlet?accion=ver&id="
+            linkComprobante = ctx + "/VentaServlet?accion=ver&id="
                     + Integer.parseInt(request.getParameter("id"));
         } catch (Exception e) {
-            linkBoleta = null;
+            linkComprobante = null;
         }
     } else if ("anulada".equals(msg)) {
         textoMsg = "Venta anulada. El stock fue devuelto.";
@@ -82,20 +82,20 @@
 
     <main class="contenido">
         <h1>Ventas</h1>
-        <p class="sub mb-4">Registra ventas y emite la boleta. El stock se descuenta automáticamente.</p>
+        <p class="sub mb-4">Registra ventas y emite boleta o factura. El stock se descuenta automáticamente.</p>
 
         <% if (textoMsg != null) { %>
             <div class="alerta-ok">
                 <%= h(textoMsg) %>
-                <% if (linkBoleta != null) { %>
-                    <a href="<%= linkBoleta %>" class="btn-mini ms-2">Ver boleta</a>
+                <% if (linkComprobante != null) { %>
+                    <a href="<%= linkComprobante %>" class="btn-mini ms-2">Ver comprobante</a>
                 <% } %>
             </div>
         <% } %>
         <% if (flash != null) { %><div class="alerta-err"><%= h(flash) %></div><% } %>
 
         <section class="caja mb-4">
-            <h2>Nueva venta (boleta)</h2>
+            <h2>Nueva venta</h2>
 
             <% if (!puedeVender) { %>
                 <div class="alerta-err mb-0">Para vender necesitas al menos un cliente activo y un producto activo con stock.</div>
@@ -117,10 +117,23 @@
                         <label for="idCliente">Cliente</label>
                         <select class="form-select" id="idCliente" name="idCliente" required>
                             <% for (Cliente c : clientes) { %>
-                                <option value="<%= c.getIdCliente() %>"><%= h(c.getNombres()) %> <%= h(c.getApellidos()) %> · DNI <%= h(c.getDni()) %></option>
+                                <option value="<%= c.getIdCliente() %>"
+                                        data-ruc="<%= c.getRuc() == null ? "" : h(c.getRuc()) %>"><%= h(c.getNombres()) %> <%= h(c.getApellidos()) %> · DNI <%= h(c.getDni()) %><%= c.isTieneRuc() ? " · RUC " + h(c.getRuc()) : "" %></option>
                             <% } %>
                         </select>
                     </div>
+                    <div class="col-12 col-lg-3">
+                        <label for="tipoComprobante">Comprobante</label>
+                        <select class="form-select" id="tipoComprobante" name="tipoComprobante" required>
+                            <option value="Boleta" selected>Boleta</option>
+                            <option value="Factura">Factura</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div id="avisoRuc" class="alerta-err" hidden>
+                    Este cliente no tiene RUC registrado, así que no se le puede emitir factura.
+                    Edítalo en <a href="<%= ctx %>/ClienteServlet">Clientes</a> o elige boleta.
                 </div>
 
                 <h3>Productos</h3>
@@ -157,7 +170,7 @@
                 <table class="tabla">
                     <thead>
                         <tr>
-                            <th>Boleta</th><th>Fecha</th><th>Cliente</th><th>Vendedor</th>
+                            <th>Comprobante</th><th>Fecha</th><th>Cliente</th><th>Vendedor</th>
                             <th>Total</th><th>Estado</th><th>Acciones</th>
                         </tr>
                     </thead>
@@ -165,15 +178,23 @@
                     <% for (Venta v : ventas) {
                            boolean emitida = "Emitida".equalsIgnoreCase(v.getEstado()); %>
                         <tr>
-                            <td><strong><%= h(v.getNumeroCompleto()) %></strong></td>
+                            <td>
+                                <strong><%= h(v.getNumeroCompleto()) %></strong>
+                                <div class="form-text"><%= h(v.getTipoComprobante()) %></div>
+                            </td>
                             <td><%= v.getFechaVenta().toLocalDateTime().format(FMT) %></td>
-                            <td><%= h(v.getClienteNombre()) %></td>
+                            <td>
+                                <%= h(v.getClienteNombre()) %>
+                                <% if (v.isFactura() && v.getRazonSocial() != null) { %>
+                                    <div class="form-text"><%= h(v.getRazonSocial()) %></div>
+                                <% } %>
+                            </td>
                             <td><%= h(v.getUsuario()) %></td>
                             <td>S/ <%= m(v.getTotal()) %></td>
                             <td><span class="insignia <%= emitida ? "ok" : "mal" %>"><%= h(v.getEstado()) %></span></td>
                             <td>
                                 <div class="d-flex flex-wrap gap-1">
-                                    <a class="btn-mini" href="<%= ctx %>/VentaServlet?accion=ver&id=<%= v.getIdVenta() %>">Ver boleta</a>
+                                    <a class="btn-mini" href="<%= ctx %>/VentaServlet?accion=ver&id=<%= v.getIdVenta() %>">Ver comprobante</a>
                                     <% if (esAdmin && emitida) { %>
                                     <form method="post" action="<%= ctx %>/VentaServlet" class="d-inline"
                                           onsubmit="return confirm('¿Anular esta venta? El stock se devolverá.');">
@@ -201,9 +222,20 @@
         var cuerpo = document.getElementById('lineas');
         var agregar = document.getElementById('agregar');
         var guardar = document.getElementById('guardar');
+        var cliente = document.getElementById('idCliente');
+        var tipo = document.getElementById('tipoComprobante');
+        var aviso = document.getElementById('avisoRuc');
         if (!catalogo || !cuerpo) { return; }
 
         function fmt(n) { return 'S/ ' + n.toFixed(2); }
+
+        // La factura exige que el cliente elegido tenga RUC
+        function tipoValido() {
+            var opt = cliente.options[cliente.selectedIndex];
+            var sinRuc = tipo.value === 'Factura' && !opt.dataset.ruc;
+            aviso.hidden = !sinRuc;
+            return !sinRuc;
+        }
 
         function recalcular() {
             var total = 0;
@@ -223,7 +255,7 @@
             document.getElementById('tSub').textContent = fmt(subtotal);
             document.getElementById('tIgv').textContent = fmt(total - subtotal);
             document.getElementById('tTotal').textContent = fmt(total);
-            guardar.disabled = filas.length === 0;
+            guardar.disabled = filas.length === 0 || !tipoValido();
         }
 
         agregar.addEventListener('click', function () {
@@ -245,6 +277,8 @@
                 recalcular();
             }
         });
+        cliente.addEventListener('change', recalcular);
+        tipo.addEventListener('change', recalcular);
 
         agregar.click();
     })();
