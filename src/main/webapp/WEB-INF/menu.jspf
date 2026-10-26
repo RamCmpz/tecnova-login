@@ -1,0 +1,26 @@
+<%
+    String ctxMenu = request.getContextPath();
+    String activaMenu = (paginaActiva == null) ? "" : paginaActiva;
+    String usuarioMenu = String.valueOf(session.getAttribute("usuario"))
+            .replace("&", "&amp;").replace("<", "&lt;")
+            .replace(">", "&gt;").replace("\"", "&quot;");
+%>
+<aside class="sidebar">
+    <div class="logo-texto">Tec<span>Nova</span></div>
+
+    <nav class="menu">
+        <a href="<%= ctxMenu %>/inicio.jsp" class="<%= "inicio".equals(activaMenu) ? "activo" : "" %>">🏠 Inicio</a>
+        <a href="<%= ctxMenu %>/UsuarioServlet" class="<%= "usuarios".equals(activaMenu) ? "activo" : "" %>">👥 Usuarios</a>
+        <a href="<%= ctxMenu %>/ClienteServlet" class="<%= "clientes".equals(activaMenu) ? "activo" : "" %>">🧑‍💼 Clientes</a>
+        <a href="<%= ctxMenu %>/ProveedorServlet" class="<%= "proveedores".equals(activaMenu) ? "activo" : "" %>">🚚 Proveedores</a>
+        <a href="<%= ctxMenu %>/ProductoServlet" class="<%= "productos".equals(activaMenu) ? "activo" : "" %>">📦 Productos</a>
+        <a href="#">🧾 Ventas <span class="pronto">pronto</span></a>
+        <a href="#">📊 Reportes <span class="pronto">pronto</span></a>
+    </nav>
+
+    <div class="usuario-box">
+        Sesión iniciada como
+        <strong><%= usuarioMenu %></strong>
+        <a class="btn btn-azul btn-salir" href="<%= ctxMenu %>/CerrarSesionServlet">Cerrar sesión</a>
+    </div>
+</aside>
