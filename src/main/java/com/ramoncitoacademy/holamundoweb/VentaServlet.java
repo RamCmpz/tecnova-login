@@ -109,13 +109,15 @@ public class VentaServlet extends HttpServlet {
             throws SQLException, VentaRepository.VentaException, IOException {
 
         Integer idCliente = aEntero(request.getParameter("idCliente"));
+        String tipo = request.getParameter("tipoComprobante");
         String[] ids = request.getParameterValues("idProducto");
         String[] cantidades = request.getParameterValues("cantidad");
 
-        if (idCliente == null || ids == null || cantidades == null
+        if (idCliente == null || ComprobanteStrategy.de(tipo) == null
+                || ids == null || cantidades == null
                 || ids.length == 0 || ids.length != cantidades.length
                 || ids.length > MAX_LINEAS) {
-            error(request, response, "Datos de la venta inválidos. Elige un cliente y al menos un producto.");
+            error(request, response, "Datos de la venta inválidos. Elige un cliente, el tipo de comprobante y al menos un producto.");
             return;
         }
 
@@ -132,7 +134,7 @@ public class VentaServlet extends HttpServlet {
             items.merge(producto, cantidad, Integer::sum);
         }
 
-        int idVenta = repo.crear(idCliente, actual, items);
+        int idVenta = repo.crear(idCliente, actual, items, tipo);
         response.sendRedirect(request.getContextPath()
                 + "/VentaServlet?msg=creada&id=" + idVenta);
     }
