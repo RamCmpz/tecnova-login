@@ -32,13 +32,15 @@
         return;
     }
     boolean anulada = !"Emitida".equalsIgnoreCase(v.getEstado());
+    boolean factura = v.isFactura();
+    String titulo = factura ? "FACTURA DE VENTA" : "BOLETA DE VENTA";
 %>
 <!DOCTYPE html>
 <html lang="es">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Boleta <%= h(v.getNumeroCompleto()) %> | TecNova</title>
+    <title><%= h(v.getTipoComprobante()) %> <%= h(v.getNumeroCompleto()) %> | TecNova</title>
     <style>
         * { box-sizing: border-box; }
         body { margin: 0; padding: 24px 12px; background: #e9edf3; font-family: "Segoe UI", Arial, sans-serif; color: #1b2433; }
@@ -51,7 +53,7 @@
         .numero strong { display: block; font-size: 13px; }
         .numero span { font-size: 20px; font-weight: 700; }
         .datos { margin: 18px 0; font-size: 14px; line-height: 1.8; }
-        .datos b { display: inline-block; min-width: 90px; }
+        .datos b { display: inline-block; min-width: 110px; }
         table { width: 100%; border-collapse: collapse; font-size: 14px; }
         th { text-align: left; background: #f0f3f8; padding: 9px 10px; font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px; }
         td { padding: 9px 10px; border-bottom: 1px solid #e6eaf1; }
@@ -82,17 +84,25 @@
         <% if (anulada) { %><div class="sello">ANULADA</div><% } %>
 
         <div class="cabecera">
-            <div class="marca">Tec<span>Nova</span><small>Tienda de tecnología · Lima, Perú</small></div>
+            <div class="marca">Tec<span>Nova</span>
+                <small>Tienda de tecnología · Lima, Perú<%= factura ? " · RUC 20123456789" : "" %></small>
+            </div>
             <div class="numero">
-                <strong>BOLETA DE VENTA</strong>
+                <strong><%= titulo %></strong>
                 <span><%= h(v.getNumeroCompleto()) %></span>
             </div>
         </div>
 
         <div class="datos">
             <div><b>Fecha:</b> <%= v.getFechaVenta().toLocalDateTime().format(FMT) %></div>
-            <div><b>Cliente:</b> <%= h(v.getClienteNombre()) %></div>
-            <div><b>DNI:</b> <%= h(v.getClienteDni()) %></div>
+            <% if (factura) { %>
+                <div><b>Razón social:</b> <%= h(v.getRazonSocial()) %></div>
+                <div><b>RUC:</b> <%= h(v.getRuc()) %></div>
+                <div><b>Contacto:</b> <%= h(v.getClienteNombre()) %></div>
+            <% } else { %>
+                <div><b>Cliente:</b> <%= h(v.getClienteNombre()) %></div>
+                <div><b>DNI:</b> <%= h(v.getClienteDni()) %></div>
+            <% } %>
             <div><b>Vendedor:</b> <%= h(v.getUsuario()) %></div>
         </div>
 
@@ -119,7 +129,7 @@
             <div class="gran"><span>TOTAL</span><span>S/ <%= m(v.getTotal()) %></span></div>
         </div>
 
-        <div class="pie">Gracias por su compra · Documento generado por el sistema TecNova (proyecto académico)</div>
+        <div class="pie">Gracias por su compra · Documento generado por el sistema TecNova (proyecto académico, sin validez tributaria)</div>
     </div>
 
 </body>
