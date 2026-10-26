@@ -75,7 +75,7 @@
                 </a>
             </div>
             <div class="col-12 col-md-6 col-xl-4">
-                <a href="#" class="tarjeta-mod">
+                <a href="VentaServlet" class="tarjeta-mod">
                     <div class="icono">🧾</div>
                     <h5>Ventas</h5>
                     <p>Registro de ventas y emisión de boletas o facturas.</p>
