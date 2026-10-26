@@ -75,6 +75,13 @@
                 </a>
             </div>
             <div class="col-12 col-md-6 col-xl-4">
+                <a href="PedidoServlet" class="tarjeta-mod">
+                    <div class="icono">📝</div>
+                    <h5>Pedidos</h5>
+                    <p>Solicitudes de los clientes, listas para convertir en venta.</p>
+                </a>
+            </div>
+            <div class="col-12 col-md-6 col-xl-4">
                 <a href="VentaServlet" class="tarjeta-mod">
                     <div class="icono">🧾</div>
                     <h5>Ventas</h5>
