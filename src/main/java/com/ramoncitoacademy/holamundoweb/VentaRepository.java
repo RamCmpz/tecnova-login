@@ -95,7 +95,7 @@ public class VentaRepository {
     // ---------- Crear venta ----------
 
     /**
-     * Registra una venta con su boleta en una sola transacción.
+     * Registra una venta con su boleta en una transacción propia.
      * Los precios se toman de la base de datos, nunca del formulario.
      *
      * @param items mapa idProducto -> cantidad
@@ -104,165 +104,177 @@ public class VentaRepository {
     public int crear(int idCliente, String usuario, Map<Integer, Integer> items)
             throws SQLException, VentaException {
 
+        try (Connection con = ConexionDB.getInstance().getConnection()) {
+            con.setAutoCommit(false);
+            try {
+                int idVenta = crearEnTransaccion(con, idCliente, usuario, items, TIPO, SERIE);
+                con.commit();
+                return idVenta;
+            } catch (SQLException | VentaException | RuntimeException e) {
+                con.rollback();
+                throw e;
+            }
+        }
+    }
+
+    /**
+     * Misma lógica de crear(), pero dentro de una transacción ya abierta.
+     * No hace commit ni rollback: eso lo decide quien llama. Así otro proceso
+     * (por ejemplo, convertir un pedido) puede unirla a su propia transacción.
+     */
+    public int crearEnTransaccion(Connection con, int idCliente, String usuario,
+                                  Map<Integer, Integer> items, String tipo, String serie)
+            throws SQLException, VentaException {
+
         if (items == null || items.isEmpty()) {
             throw new VentaException("Agrega al menos un producto a la venta.");
         }
         // Orden fijo por idProducto: evita bloqueos cruzados entre ventas simultáneas
         Map<Integer, Integer> ordenados = new TreeMap<>(items);
 
-        try (Connection con = ConexionDB.getInstance().getConnection()) {
-            con.setAutoCommit(false);
-            try {
-                // 1. Cliente activo
-                try (PreparedStatement ps = con.prepareStatement(
-                        "SELECT estado FROM cliente WHERE idCliente = ?")) {
-                    ps.setInt(1, idCliente);
-                    try (ResultSet rs = ps.executeQuery()) {
-                        if (!rs.next() || !"Activo".equalsIgnoreCase(rs.getString(1))) {
-                            throw new VentaException("El cliente no existe o está inactivo.");
-                        }
-                    }
+        // 1. Cliente activo
+        try (PreparedStatement ps = con.prepareStatement(
+                "SELECT estado FROM cliente WHERE idCliente = ?")) {
+            ps.setInt(1, idCliente);
+            try (ResultSet rs = ps.executeQuery()) {
+                if (!rs.next() || !"Activo".equalsIgnoreCase(rs.getString(1))) {
+                    throw new VentaException("El cliente no existe o está inactivo.");
                 }
-
-                // 2. Usuario que registra la venta
-                long idUsuario;
-                try (PreparedStatement ps = con.prepareStatement(
-                        "SELECT id FROM usuarios WHERE usuario = ? AND estado = 'Activo'")) {
-                    ps.setString(1, usuario);
-                    try (ResultSet rs = ps.executeQuery()) {
-                        if (!rs.next()) {
-                            throw new VentaException("El usuario de la sesión no es válido.");
-                        }
-                        idUsuario = rs.getLong(1);
-                    }
-                }
-
-                // 3. Productos: bloquea cada fila, valida stock y toma el precio real
-                List<DetalleVenta> detalles = new ArrayList<>();
-                BigDecimal total = BigDecimal.ZERO;
-
-                try (PreparedStatement ps = con.prepareStatement(
-                        "SELECT codigo, nombre, precioVenta, stock, estado "
-                        + "FROM producto WHERE idProducto = ? FOR UPDATE")) {
-                    for (Map.Entry<Integer, Integer> e : ordenados.entrySet()) {
-                        int cantidad = e.getValue();
-                        if (cantidad < 1 || cantidad > MAX_CANTIDAD) {
-                            throw new VentaException("La cantidad de un producto no es válida.");
-                        }
-                        ps.setInt(1, e.getKey());
-                        try (ResultSet rs = ps.executeQuery()) {
-                            if (!rs.next() || !"Activo".equalsIgnoreCase(rs.getString("estado"))) {
-                                throw new VentaException("Un producto no existe o está inactivo.");
-                            }
-                            String nombre = rs.getString("nombre");
-                            int stock = rs.getInt("stock");
-                            if (stock < cantidad) {
-                                throw new VentaException("Stock insuficiente de \"" + nombre
-                                        + "\": quedan " + stock + " y se pidieron " + cantidad + ".");
-                            }
-
-                            BigDecimal precio = rs.getBigDecimal("precioVenta");
-                            BigDecimal subtotalLinea = precio.multiply(BigDecimal.valueOf(cantidad));
-
-                            DetalleVenta d = new DetalleVenta();
-                            d.setIdProducto(e.getKey());
-                            d.setCantidad(cantidad);
-                            d.setPrecioUnitario(precio);
-                            d.setSubtotal(subtotalLinea);
-                            detalles.add(d);
-
-                            total = total.add(subtotalLinea);
-                        }
-                    }
-                }
-
-                // 4. Totales: el precio incluye IGV (18 %)
-                BigDecimal subtotal = total.divide(FACTOR_IGV, 2, RoundingMode.HALF_UP);
-                BigDecimal igv = total.subtract(subtotal);
-
-                // 5. Cabecera de la venta
-                int idVenta;
-                try (PreparedStatement ps = con.prepareStatement(
-                        "INSERT INTO venta (idCliente, idUsuario, subtotal, igv, total) "
-                        + "VALUES (?, ?, ?, ?, ?)", Statement.RETURN_GENERATED_KEYS)) {
-                    ps.setInt(1, idCliente);
-                    ps.setLong(2, idUsuario);
-                    ps.setBigDecimal(3, subtotal);
-                    ps.setBigDecimal(4, igv);
-                    ps.setBigDecimal(5, total);
-                    ps.executeUpdate();
-                    try (ResultSet keys = ps.getGeneratedKeys()) {
-                        if (!keys.next()) {
-                            throw new SQLException("No se obtuvo el id de la venta.");
-                        }
-                        idVenta = keys.getInt(1);
-                    }
-                }
-
-                // 6. Detalle y descuento de stock
-                try (PreparedStatement psDet = con.prepareStatement(
-                             "INSERT INTO detalle_venta (idVenta, idProducto, cantidad, "
-                             + "precioUnitario, subtotal) VALUES (?, ?, ?, ?, ?)");
-                     PreparedStatement psStock = con.prepareStatement(
-                             "UPDATE producto SET stock = stock - ? "
-                             + "WHERE idProducto = ? AND stock >= ?")) {
-                    for (DetalleVenta d : detalles) {
-                        psDet.setInt(1, idVenta);
-                        psDet.setInt(2, d.getIdProducto());
-                        psDet.setInt(3, d.getCantidad());
-                        psDet.setBigDecimal(4, d.getPrecioUnitario());
-                        psDet.setBigDecimal(5, d.getSubtotal());
-                        psDet.executeUpdate();
-
-                        psStock.setInt(1, d.getCantidad());
-                        psStock.setInt(2, d.getIdProducto());
-                        psStock.setInt(3, d.getCantidad());
-                        if (psStock.executeUpdate() != 1) {
-                            throw new VentaException("No se pudo descontar el stock de un producto.");
-                        }
-                    }
-                }
-
-                // 7. Número de comprobante: sin repetidos ni saltos
-                int numero;
-                try (PreparedStatement ps = con.prepareStatement(
-                        "SELECT ultimoNumero FROM serie_comprobante "
-                        + "WHERE tipo = ? AND serie = ? FOR UPDATE")) {
-                    ps.setString(1, TIPO);
-                    ps.setString(2, SERIE);
-                    try (ResultSet rs = ps.executeQuery()) {
-                        if (!rs.next()) {
-                            throw new VentaException("No hay una serie configurada para boletas.");
-                        }
-                        numero = rs.getInt(1) + 1;
-                    }
-                }
-                try (PreparedStatement ps = con.prepareStatement(
-                        "UPDATE serie_comprobante SET ultimoNumero = ? "
-                        + "WHERE tipo = ? AND serie = ?")) {
-                    ps.setInt(1, numero);
-                    ps.setString(2, TIPO);
-                    ps.setString(3, SERIE);
-                    ps.executeUpdate();
-                }
-                try (PreparedStatement ps = con.prepareStatement(
-                        "INSERT INTO comprobante (idVenta, tipo, serie, numero) "
-                        + "VALUES (?, ?, ?, ?)")) {
-                    ps.setInt(1, idVenta);
-                    ps.setString(2, TIPO);
-                    ps.setString(3, SERIE);
-                    ps.setInt(4, numero);
-                    ps.executeUpdate();
-                }
-
-                con.commit();
-                return idVenta;
-
-            } catch (SQLException | VentaException | RuntimeException e) {
-                con.rollback();
-                throw e;
             }
         }
+
+        // 2. Usuario que registra la venta
+        long idUsuario;
+        try (PreparedStatement ps = con.prepareStatement(
+                "SELECT id FROM usuarios WHERE usuario = ? AND estado = 'Activo'")) {
+            ps.setString(1, usuario);
+            try (ResultSet rs = ps.executeQuery()) {
+                if (!rs.next()) {
+                    throw new VentaException("El usuario de la sesión no es válido.");
+                }
+                idUsuario = rs.getLong(1);
+            }
+        }
+
+        // 3. Productos: bloquea cada fila, valida stock y toma el precio real
+        List<DetalleVenta> detalles = new ArrayList<>();
+        BigDecimal total = BigDecimal.ZERO;
+
+        try (PreparedStatement ps = con.prepareStatement(
+                "SELECT codigo, nombre, precioVenta, stock, estado "
+                + "FROM producto WHERE idProducto = ? FOR UPDATE")) {
+            for (Map.Entry<Integer, Integer> e : ordenados.entrySet()) {
+                int cantidad = e.getValue();
+                if (cantidad < 1 || cantidad > MAX_CANTIDAD) {
+                    throw new VentaException("La cantidad de un producto no es válida.");
+                }
+                ps.setInt(1, e.getKey());
+                try (ResultSet rs = ps.executeQuery()) {
+                    if (!rs.next() || !"Activo".equalsIgnoreCase(rs.getString("estado"))) {
+                        throw new VentaException("Un producto no existe o está inactivo.");
+                    }
+                    String nombre = rs.getString("nombre");
+                    int stock = rs.getInt("stock");
+                    if (stock < cantidad) {
+                        throw new VentaException("Stock insuficiente de \"" + nombre
+                                + "\": quedan " + stock + " y se pidieron " + cantidad + ".");
+                    }
+
+                    BigDecimal precio = rs.getBigDecimal("precioVenta");
+                    BigDecimal subtotalLinea = precio.multiply(BigDecimal.valueOf(cantidad));
+
+                    DetalleVenta d = new DetalleVenta();
+                    d.setIdProducto(e.getKey());
+                    d.setCantidad(cantidad);
+                    d.setPrecioUnitario(precio);
+                    d.setSubtotal(subtotalLinea);
+                    detalles.add(d);
+
+                    total = total.add(subtotalLinea);
+                }
+            }
+        }
+
+        // 4. Totales: el precio incluye IGV (18 %)
+        BigDecimal subtotal = total.divide(FACTOR_IGV, 2, RoundingMode.HALF_UP);
+        BigDecimal igv = total.subtract(subtotal);
+
+        // 5. Cabecera de la venta
+        int idVenta;
+        try (PreparedStatement ps = con.prepareStatement(
+                "INSERT INTO venta (idCliente, idUsuario, subtotal, igv, total) "
+                + "VALUES (?, ?, ?, ?, ?)", Statement.RETURN_GENERATED_KEYS)) {
+            ps.setInt(1, idCliente);
+            ps.setLong(2, idUsuario);
+            ps.setBigDecimal(3, subtotal);
+            ps.setBigDecimal(4, igv);
+            ps.setBigDecimal(5, total);
+            ps.executeUpdate();
+            try (ResultSet keys = ps.getGeneratedKeys()) {
+                if (!keys.next()) {
+                    throw new SQLException("No se obtuvo el id de la venta.");
+                }
+                idVenta = keys.getInt(1);
+            }
+        }
+
+        // 6. Detalle y descuento de stock
+        try (PreparedStatement psDet = con.prepareStatement(
+                     "INSERT INTO detalle_venta (idVenta, idProducto, cantidad, "
+                     + "precioUnitario, subtotal) VALUES (?, ?, ?, ?, ?)");
+             PreparedStatement psStock = con.prepareStatement(
+                     "UPDATE producto SET stock = stock - ? "
+                     + "WHERE idProducto = ? AND stock >= ?")) {
+            for (DetalleVenta d : detalles) {
+                psDet.setInt(1, idVenta);
+                psDet.setInt(2, d.getIdProducto());
+                psDet.setInt(3, d.getCantidad());
+                psDet.setBigDecimal(4, d.getPrecioUnitario());
+                psDet.setBigDecimal(5, d.getSubtotal());
+                psDet.executeUpdate();
+
+                psStock.setInt(1, d.getCantidad());
+                psStock.setInt(2, d.getIdProducto());
+                psStock.setInt(3, d.getCantidad());
+                if (psStock.executeUpdate() != 1) {
+                    throw new VentaException("No se pudo descontar el stock de un producto.");
+                }
+            }
+        }
+
+        // 7. Número de comprobante: sin repetidos ni saltos
+        int numero;
+        try (PreparedStatement ps = con.prepareStatement(
+                "SELECT ultimoNumero FROM serie_comprobante "
+                + "WHERE tipo = ? AND serie = ? FOR UPDATE")) {
+            ps.setString(1, tipo);
+            ps.setString(2, serie);
+            try (ResultSet rs = ps.executeQuery()) {
+                if (!rs.next()) {
+                    throw new VentaException("No hay una serie configurada para " + tipo + ".");
+                }
+                numero = rs.getInt(1) + 1;
+            }
+        }
+        try (PreparedStatement ps = con.prepareStatement(
+                "UPDATE serie_comprobante SET ultimoNumero = ? "
+                + "WHERE tipo = ? AND serie = ?")) {
+            ps.setInt(1, numero);
+            ps.setString(2, tipo);
+            ps.setString(3, serie);
+            ps.executeUpdate();
+        }
+        try (PreparedStatement ps = con.prepareStatement(
+                "INSERT INTO comprobante (idVenta, tipo, serie, numero) "
+                + "VALUES (?, ?, ?, ?)")) {
+            ps.setInt(1, idVenta);
+            ps.setString(2, tipo);
+            ps.setString(3, serie);
+            ps.setInt(4, numero);
+            ps.executeUpdate();
+        }
+
+        return idVenta;
     }
 
     // ---------- Anular venta ----------
