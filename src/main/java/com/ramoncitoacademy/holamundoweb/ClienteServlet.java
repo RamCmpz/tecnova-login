@@ -16,6 +16,7 @@ import jakarta.servlet.http.HttpSession;
 public class ClienteServlet extends HttpServlet {
 
     private static final Pattern DNI = Pattern.compile("^[0-9]{8}$");
+    private static final Pattern RUC = Pattern.compile("^(10|15|17|20)[0-9]{9}$");
     private static final Pattern TELEFONO = Pattern.compile("^[0-9+ \\-]{6,20}$");
     private static final Pattern CORREO = Pattern.compile("^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$");
     private static final Set<String> TIPOS = Set.of("Minorista", "Mayorista");
@@ -95,7 +96,7 @@ public class ClienteServlet extends HttpServlet {
         }
         c.setDni(dni);
 
-        if (repo.existeDni(dni)) {
+        if (repo.existeDni(dni) || (c.getRuc() != null && repo.existeRuc(c.getRuc()))) {
             redirigir(request, response, "err=duplicado");
             return;
         }
@@ -151,6 +152,8 @@ public class ClienteServlet extends HttpServlet {
         String telefono = recortar(request.getParameter("telefono"));
         String direccion = recortar(request.getParameter("direccion"));
         String tipo = recortar(request.getParameter("tipoCliente"));
+        String ruc = recortar(request.getParameter("ruc"));
+        String razonSocial = recortar(request.getParameter("razonSocial"));
 
         if (nombres == null || nombres.length() > 80
                 || apellidos == null || apellidos.length() > 80
@@ -162,6 +165,14 @@ public class ClienteServlet extends HttpServlet {
             return null;
         }
 
+        // RUC y razón social van juntos: o se llenan los dos, o ninguno
+        if ((ruc == null) != (razonSocial == null)) {
+            return null;
+        }
+        if (ruc != null && (!RUC.matcher(ruc).matches() || razonSocial.length() > 120)) {
+            return null;
+        }
+
         Cliente c = new Cliente();
         c.setNombres(nombres);
         c.setApellidos(apellidos);
@@ -169,6 +180,8 @@ public class ClienteServlet extends HttpServlet {
         c.setTelefono(telefono);
         c.setDireccion(direccion);
         c.setTipoCliente(tipo);
+        c.setRuc(ruc);
+        c.setRazonSocial(razonSocial);
         return c;
     }
 
