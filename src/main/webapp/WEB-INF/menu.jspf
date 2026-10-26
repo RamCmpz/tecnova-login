@@ -15,6 +15,7 @@
         <a href="<%= ctxMenu %>/ClienteServlet" class="<%= "clientes".equals(activaMenu) ? "activo" : "" %>">🧑‍💼 Clientes</a>
         <a href="<%= ctxMenu %>/ProveedorServlet" class="<%= "proveedores".equals(activaMenu) ? "activo" : "" %>">🚚 Proveedores</a>
         <a href="<%= ctxMenu %>/ProductoServlet" class="<%= "productos".equals(activaMenu) ? "activo" : "" %>">📦 Productos</a>
+        <a href="<%= ctxMenu %>/PedidoServlet" class="<%= "pedidos".equals(activaMenu) ? "activo" : "" %>">📝 Pedidos</a>
         <a href="<%= ctxMenu %>/VentaServlet" class="<%= "ventas".equals(activaMenu) ? "activo" : "" %>">🧾 Ventas</a>
         <a href="#">📊 Reportes <span class="pronto">pronto</span></a>
     </nav>
