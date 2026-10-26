@@ -23,13 +23,11 @@ public class VentaRepository {
     }
 
     private static final BigDecimal FACTOR_IGV = new BigDecimal("1.18");
-    private static final String TIPO = "Boleta";
-    private static final String SERIE = "B001";
     private static final int MAX_CANTIDAD = 1_000_000;
 
     private static final String SELECT_BASE =
             "SELECT v.idVenta, v.idCliente, v.fechaVenta, v.subtotal, v.igv, v.total, "
-            + "v.estado, co.tipo, co.serie, co.numero, "
+            + "v.estado, co.tipo, co.serie, co.numero, co.ruc, co.razonSocial, "
             + "d.nombres, d.apellidos, d.dni, u.usuario "
             + "FROM venta v "
             + "JOIN comprobante co ON co.idVenta = v.idVenta "
@@ -95,19 +93,25 @@ public class VentaRepository {
     // ---------- Crear venta ----------
 
     /**
-     * Registra una venta con su boleta en una transacción propia.
+     * Registra una venta con su comprobante en una transacción propia.
      * Los precios se toman de la base de datos, nunca del formulario.
      *
      * @param items mapa idProducto -> cantidad
+     * @param tipo  "Boleta" o "Factura"
      * @return el id de la venta creada
      */
-    public int crear(int idCliente, String usuario, Map<Integer, Integer> items)
+    public int crear(int idCliente, String usuario, Map<Integer, Integer> items, String tipo)
             throws SQLException, VentaException {
+
+        ComprobanteStrategy estrategia = ComprobanteStrategy.de(tipo);
+        if (estrategia == null) {
+            throw new VentaException("Tipo de comprobante no válido.");
+        }
 
         try (Connection con = ConexionDB.getInstance().getConnection()) {
             con.setAutoCommit(false);
             try {
-                int idVenta = crearEnTransaccion(con, idCliente, usuario, items, TIPO, SERIE);
+                int idVenta = crearEnTransaccion(con, idCliente, usuario, items, estrategia);
                 con.commit();
                 return idVenta;
             } catch (SQLException | VentaException | RuntimeException e) {
@@ -118,12 +122,25 @@ public class VentaRepository {
     }
 
     /**
-     * Misma lógica de crear(), pero dentro de una transacción ya abierta.
-     * No hace commit ni rollback: eso lo decide quien llama. Así otro proceso
-     * (por ejemplo, convertir un pedido) puede unirla a su propia transacción.
+     * Compatibilidad con PedidoRepository (versión anterior). El parámetro
+     * serie se ignora: la serie la define la estrategia del tipo.
      */
     public int crearEnTransaccion(Connection con, int idCliente, String usuario,
                                   Map<Integer, Integer> items, String tipo, String serie)
+            throws SQLException, VentaException {
+        ComprobanteStrategy estrategia = ComprobanteStrategy.de(tipo);
+        if (estrategia == null) {
+            throw new VentaException("Tipo de comprobante no válido.");
+        }
+        return crearEnTransaccion(con, idCliente, usuario, items, estrategia);
+    }
+
+    /**
+     * Misma lógica de crear(), pero dentro de una transacción ya abierta.
+     * No hace commit ni rollback: eso lo decide quien llama.
+     */
+    public int crearEnTransaccion(Connection con, int idCliente, String usuario,
+                                  Map<Integer, Integer> items, ComprobanteStrategy estrategia)
             throws SQLException, VentaException {
 
         if (items == null || items.isEmpty()) {
@@ -132,14 +149,26 @@ public class VentaRepository {
         // Orden fijo por idProducto: evita bloqueos cruzados entre ventas simultáneas
         Map<Integer, Integer> ordenados = new TreeMap<>(items);
 
-        // 1. Cliente activo
+        // 1. Cliente activo y apto para este tipo de comprobante
+        String rucCliente = null;
+        String razonCliente = null;
         try (PreparedStatement ps = con.prepareStatement(
-                "SELECT estado FROM cliente WHERE idCliente = ?")) {
+                "SELECT estado, ruc, razonSocial FROM cliente WHERE idCliente = ?")) {
             ps.setInt(1, idCliente);
             try (ResultSet rs = ps.executeQuery()) {
-                if (!rs.next() || !"Activo".equalsIgnoreCase(rs.getString(1))) {
+                if (!rs.next() || !"Activo".equalsIgnoreCase(rs.getString("estado"))) {
                     throw new VentaException("El cliente no existe o está inactivo.");
                 }
+                Cliente cliente = new Cliente();
+                cliente.setRuc(rs.getString("ruc"));
+                cliente.setRazonSocial(rs.getString("razonSocial"));
+
+                String error = estrategia.validar(cliente);
+                if (error != null) {
+                    throw new VentaException(error);
+                }
+                rucCliente = cliente.getRuc();
+                razonCliente = cliente.getRazonSocial();
             }
         }
 
@@ -242,7 +271,9 @@ public class VentaRepository {
             }
         }
 
-        // 7. Número de comprobante: sin repetidos ni saltos
+        // 7. Número de comprobante: sin repetidos ni saltos, por serie
+        String tipo = estrategia.getTipo();
+        String serie = estrategia.getSerie();
         int numero;
         try (PreparedStatement ps = con.prepareStatement(
                 "SELECT ultimoNumero FROM serie_comprobante "
@@ -264,13 +295,17 @@ public class VentaRepository {
             ps.setString(3, serie);
             ps.executeUpdate();
         }
+
+        // 8. Comprobante: la factura guarda el RUC y la razón social del momento
         try (PreparedStatement ps = con.prepareStatement(
-                "INSERT INTO comprobante (idVenta, tipo, serie, numero) "
-                + "VALUES (?, ?, ?, ?)")) {
+                "INSERT INTO comprobante (idVenta, tipo, serie, numero, ruc, razonSocial) "
+                + "VALUES (?, ?, ?, ?, ?, ?)")) {
             ps.setInt(1, idVenta);
             ps.setString(2, tipo);
             ps.setString(3, serie);
             ps.setInt(4, numero);
+            ps.setString(5, estrategia.requiereRuc() ? rucCliente : null);
+            ps.setString(6, estrategia.requiereRuc() ? razonCliente : null);
             ps.executeUpdate();
         }
 
@@ -341,6 +376,8 @@ public class VentaRepository {
         v.setTipoComprobante(rs.getString("tipo"));
         v.setSerie(rs.getString("serie"));
         v.setNumero(rs.getInt("numero"));
+        v.setRuc(rs.getString("ruc"));
+        v.setRazonSocial(rs.getString("razonSocial"));
         v.setClienteNombre(rs.getString("nombres") + " " + rs.getString("apellidos"));
         v.setClienteDni(rs.getString("dni"));
         v.setUsuario(rs.getString("usuario"));
